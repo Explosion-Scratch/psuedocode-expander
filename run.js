@@ -238,7 +238,9 @@ function getCode(str) {
 
 function getLines(str, line) {
   const lines = str.split("\n");
-  const start = lines.findIndex((i) => normalize(i).includes(normalize(line)));
+  const start = lines.findIndex((i) =>
+    normalize(i).startsWith(normalize(line)),
+  );
   const leadingWhitespace = wtspc(lines[start].match(/^\s*/)[0]);
   let out = [lines[start]];
   let endIdx = start;
@@ -272,8 +274,10 @@ function normalize(str) {
 }
 
 async function runPrompt(message) {
+  const allKeys = process.env.GEMINI_API_KEY.split(":").map((i) => i.trim());
+  const apiKey = allKeys[Math.floor(Math.random() * allKeys.length)];
   const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY,
+    apiKey,
   });
   const spinner = ora("Generating content with Gemini...").start();
   try {
