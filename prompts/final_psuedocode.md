@@ -1,0 +1,1 @@
+Now output the next step as plain text English readable psuedocode and use indentation to represent the structure. Make sure to only go one step forward in psuedocode generation. Write in PLAIN ENGLISH PSUEDOCODE

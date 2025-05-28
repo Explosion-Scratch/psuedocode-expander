@@ -1,0 +1,1 @@
+Now output the next step for the provided psuedocode_snippet as plain text English readable psuedocode and use indentation to represent the structure. Only change and output the psuedocode from the provided psuedocode_snippet. Do not change the rest of the psuedocode. Only output the new psuedocode in a <step> block from the specific <psuedocode_snippet> you are given.
