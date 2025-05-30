@@ -384,7 +384,7 @@ function normalize(str) {
 }
 
 async function runPrompt(message) {
-  return { text: fs.readFileSync("fake.md", "utf-8")?.trim() };
+  // return { text: fs.readFileSync("fake.md", "utf-8")?.trim() };
 
   const allKeys = process.env.GEMINI_API_KEY.split(":").map((i) => i.trim());
   const apiKey = allKeys[Math.floor(Math.random() * allKeys.length)];
