@@ -1,12 +1,17 @@
 #!/usr/bin/env bun
 import { GoogleGenAI } from "@google/genai";
-const fs = require("fs");
-const path = require("path");
-const PROMPTS_DIR = path.resolve("prompts");
+import fs from "fs";
+import path from "path";
 import "dotenv/config";
 import meow from "meow";
 import ora from "ora";
+import { diffLines } from "diff";
 
+const PROMPTS_DIR = path.resolve("prompts");
+const RUNNING_PATH = "_psuedocode_history.md"; // file where user_psuedocode blocks are stored
+const META_DELIM = "\n----\n";
+
+// CLI setup
 const cli = meow(
   `
  Usage
@@ -36,28 +41,31 @@ const cli = meow(
         type: "boolean",
         default: false,
       },
+      section: {
+        type: "string",
+        default: "all",
+      },
     },
   },
 );
 
-const META_DELIM = "\n----\n";
-
 if (!cli.input[0]) {
   cli.showHelp();
 }
-
 if (!process.env.GEMINI_API_KEY) {
   console.error("Please set the GEMINI_API_KEY environment variable.");
   process.exit(1);
 }
 
-const file = cli.input[0];
+const filePath = cli.input[0];
 const specialInstructions = cli.input[1] || "";
 const mode = cli.flags.mode;
-const RUNNING_PATH = "_psuedocode_history.md";
+const OUTPUT_DIR = path.resolve("output");
 
-const processed = processFile(file);
-const { diffLines } = require("diff"); // Importing a diff library
+// Process file to get pseudocode content and meta data
+const processed = processFile(filePath);
+
+// Get the prompt text based on the file & mode:
 const {
   prompt: PROMPT,
   replace,
@@ -66,17 +74,20 @@ const {
   processed,
   mode,
   specialInstructions,
-  section: cli.flags.section,
+  section: cli.flags.section !== "all" ? cli.flags.section : null,
   dryRun: cli.flags.dryRun,
 });
 
-const OUTPUT_DIR = path.resolve("output");
+// Make sure the OUTPUT_DIR exists if we are in real code mode.
 if (mode === "realcode") {
   try {
     fs.mkdirSync(OUTPUT_DIR);
-  } catch (e) {}
+  } catch (e) {
+    // ignore if already exists
+  }
 }
 
+// In dry-run mode, output the prompt and exit.
 if (cli.flags.dryRun) {
   console.log(PROMPT);
   process.exit(0);
@@ -84,9 +95,11 @@ if (cli.flags.dryRun) {
   fs.writeFileSync("_prompt.md", PROMPT);
 }
 
+// Run the prompt
 const result = await runPrompt(PROMPT);
 
 if (mode === "realcode") {
+  // Process realcode output.
   const realCodeResult = result.text;
 
   const titleMatch = realCodeResult.match(/<title>(.*?)<\/title>/s);
@@ -107,38 +120,34 @@ if (mode === "realcode") {
 
   console.log(`\nTitle: ${title}`);
   console.log(`Description: ${description}\n`);
-
   if (runInstructions) {
-    console.log("Run Instructions:\n");
-    console.log(runInstructions);
-    console.log("\n");
+    console.log("Run Instructions:\n", runInstructions, "\n");
   }
   fs.writeFileSync(
     path.resolve(OUTPUT_DIR, "README.md"),
-    `# ${title}\n\n${description}\n\n# Run instructions:\n${runInstructions}`,
+    `# ${title}\n\n${description}\n\n# Run Instructions:\n${runInstructions}`,
   );
 
+  // Create files from output
   const fileRegex = /<file path="(.*?)" isThisLastFile="(.*?)">(.*?)<\/file>/gs;
   let fileMatch;
   while ((fileMatch = fileRegex.exec(realCodeResult)) !== null) {
-    const filePath = path.resolve(OUTPUT_DIR, fileMatch[1]);
+    const filePathReal = path.resolve(OUTPUT_DIR, fileMatch[1]);
     const fileContent = getCode(fileMatch[3]);
-
-    const dirPath = path.dirname(filePath);
-
+    const dirPath = path.dirname(filePathReal);
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
-
-    fs.writeFileSync(filePath, fileContent);
-    console.log(`Written file: ${filePath}`);
+    fs.writeFileSync(filePathReal, fileContent);
+    console.log(`Written file: ${filePathReal}`);
   }
-
   process.exit(0);
 } else {
-  const res = ((t) => {
+  // In non-realcode mode, extract tags from response text.
+  const res = (function extractTags(t) {
     const futureFeatures = extractTag("future_feature", t);
-    const possibleBugs = extractTag("possible_bug", t);
+    // using "possible_bug" from response and label it as bugs
+    const bugs = extractTag("possible_bug", t);
     const needsRegression = extractTag("needs_regression", t);
     const designDetails = extractTag("design_details", t);
 
@@ -150,53 +159,98 @@ if (mode === "realcode") {
           ?.split("</moreStepsNeeded>")[0]
           ?.trim() === "true",
       futureFeatures,
-      possibleBugs,
+      bugs,
       needsRegression,
       designDetails,
     };
   })(result.text);
+
+  // Update file with new pseudocode.
   let updated;
   if (replace) {
-    // Delete from replace[0] to replace[1] in processed.content
-    updated = processed.content
-      .split("\n")
-      .slice(0, replace[0])
-      .concat(res.step.split("\n").map((i) => leading + i))
-      .concat(processed.content.split("\n").slice(replace[1]))
-      .join("\n");
+    // Replace block in processed.content between replace indices
+    const lines = processed.content.split("\n");
+    updated =
+      lines.slice(0, replace[0]).join("\n") +
+      "\n" +
+      res.step
+        .split("\n")
+        .map((i) => leading + i)
+        .join("\n") +
+      "\n" +
+      lines.slice(replace[1]).join("\n");
   } else {
     updated = res.step;
   }
-  const originalContent = fs.readFileSync(file, "utf-8"); // Read original content
+  const originalContent = fs.readFileSync(filePath, "utf-8");
 
   fs.writeFileSync(
-    file,
-    `# application: ${processed.application}\n# details: ${processed.details}\n# step: ${processed.step + 1}\n# more: ${res.more_needed}\n----\n${updated}`,
+    filePath,
+    `# application: ${processed.application}\n` +
+      `# details: ${processed.details}\n` +
+      `# step: ${processed.step + 1}\n` +
+      `# more: ${res.more_needed}\n----\n${updated}`,
   );
 
-  const updatedContent = fs.readFileSync(file, "utf-8"); // Read updated content
-
-  function displayDiff(originalContent, updatedContent) {
-    const diff = diffLines(originalContent, updatedContent);
-    console.log("\nDiff:");
-    diff.forEach((part) => {
-      if (part.added) {
-        console.log(`\x1b[32m${part.value}\x1b[0m`); // Green text for additions
-      } else if (part.removed) {
-        console.log(`\x1b[31m${part.value}\x1b[0m`); // Red text for deletions
-      } else {
-        console.log(`\x1b[37m${part.value}\x1b[0m`); // Grey text for unchanged lines
-      }
-    });
-  }
+  const updatedContent = fs.readFileSync(filePath, "utf-8");
 
   displayDiff(originalContent, updatedContent);
-  const bulletpoints = (arr) => arr.map((i) => `- ${i}`).join("\n") + "\n\n";
 
+  // Display extracted bullet lists
+  const bulletpoints = (arr) =>
+    arr.length ? arr.map((i) => `- ${i}`).join("\n") + "\n\n" : "None\n\n";
   console.log("🚀 Future Features:\n", bulletpoints(res.futureFeatures));
-  console.log("🐞 Possible Bugs:\n", bulletpoints(res.possibleBugs));
+  console.log("🐞 Bugs:\n", bulletpoints(res.bugs));
   console.log("🔄 Needs Regression:\n", bulletpoints(res.needsRegression));
   console.log("🎨 Design Details:\n", bulletpoints(res.designDetails));
+
+  // Append the new step block (with nested tags for pseudocode, future features, and bugs)
+  appendUserPsuedocodeHistory({
+    runningPath: RUNNING_PATH,
+    stepNum: processed.step,
+    pseudocode: res.step,
+    futureFeatures: res.futureFeatures,
+    bugs: res.bugs,
+    designDetails: res.designDetails,
+  });
+}
+
+/* Helper function that appends a new pseudocode block (with extra tags) to the history file */
+function appendUserPsuedocodeHistory({
+  runningPath,
+  stepNum,
+  pseudocode,
+  futureFeatures,
+  bugs,
+  designDetails,
+}) {
+  const block = `<user_psuedocode_details step="${stepNum}">
+${futureFeatures && futureFeatures.length ? futureFeatures.map((i) => `<future_feature>${i}</future_feature>`).join("\n") : ""}
+${bugs && bugs.length ? bugs.map((i) => `<possible_bug>${i}</possible_bug>`).join("\n") : ""}
+${designDetails && designDetails.length ? `<design_details>\n${designDetails}\n</design_details>` : ""}
+</user_psuedocode_details>\n`;
+  try {
+    fs.appendFileSync(runningPath, block);
+    console.log(
+      `Appended pseudocode history block for step ${stepNum} to ${runningPath}`,
+    );
+  } catch (err) {
+    console.error("Error appending to pseudocode history file:", err);
+  }
+}
+
+function displayDiff(originalContent, updatedContent) {
+  const diff = diffLines(originalContent, updatedContent);
+  console.log("\nDiff:");
+  diff.forEach((part) => {
+    if (part.added) {
+      console.log(`\x1b[32m${part.value}\x1b[0m`); // Green for additions
+    } else if (part.removed) {
+      console.log(`\x1b[31m${part.value}\x1b[0m`); // Red for deletions
+    } else {
+      console.log(`\x1b[37m${part.value}\x1b[0m`); // Grey for unchanged
+    }
+  });
 }
 
 function getUserCode({
@@ -206,6 +260,7 @@ function getUserCode({
   section = null,
   dryRun = false,
 }) {
+  // If a section is specified, we use templates.
   if (section) {
     return getMd(`section_${mode}`)
       .replaceAll(
@@ -226,7 +281,6 @@ function getUserCode({
   } catch (e) {
     fs.writeFileSync(runningPath, "");
   }
-
   let out = `${content || ""}<user_psuedocode step="${processed.step}">\n${processed.content}\n</user_psuedocode>`;
   if (!dryRun) {
     fs.appendFileSync(runningPath, out + "\n");
@@ -278,28 +332,26 @@ function getMd(name) {
 }
 
 function getCode(str) {
-  let out = "";
   if (!str.trim()?.startsWith("```")) {
     return str.trim();
   }
   try {
-    let g = str.match(
+    const groups = str.match(
       /(?:```([a-zA-Z0-9]+)?\n(?<one>[\s\S]+?)```|[`'"](?<two>.+)[`'"])/i,
     ).groups;
-    out = g.one || g.two || g;
+    return (groups.one || groups.two || str).trim();
   } catch (error) {
-    out = str;
+    return str;
   }
-
-  return wtspc(out.trim());
 }
 
 function getLines(str, line) {
+  console.log({ str, line });
   const lines = str.split("\n");
   const start = lines.findIndex((i) =>
     normalize(i).startsWith(normalize(line)),
   );
-  const leadingWhitespace = wtspc(lines[start].match(/^\s*/)[0]);
+  const leadingWhitespace = (lines[start].match(/^\s*/) || [""])[0];
   let out = [lines[start]];
   let endIdx = start;
   for (let idx = start + 1; idx < lines.length; idx++) {
@@ -333,18 +385,16 @@ function normalize(str) {
 
 async function runPrompt(message) {
   return { text: fs.readFileSync("fake.md", "utf-8")?.trim() };
+
   const allKeys = process.env.GEMINI_API_KEY.split(":").map((i) => i.trim());
   const apiKey = allKeys[Math.floor(Math.random() * allKeys.length)];
-  const ai = new GoogleGenAI({
-    apiKey,
-  });
+  const ai = new GoogleGenAI({ apiKey });
   const spinner = ora("Generating content with Gemini...").start();
   try {
     const response = await ai.models.generateContentStream({
       model: "gemini-2.5-flash-preview-05-20",
       contents: message,
     });
-
     let fullText = "";
     for await (const chunk of response) {
       spinner.stop();
@@ -352,7 +402,6 @@ async function runPrompt(message) {
       console.log(chunk.text);
       fullText += chunk.text;
     }
-
     return { text: fullText };
   } catch (error) {
     spinner.fail("Failed to generate content.");
@@ -372,11 +421,16 @@ function getPrompt({
   if (section && !s) {
     throw new Error(`Section "${section}" not found in the content.`);
   }
-
-  let out = `${getMd(`preamble_${mode}`)}\n\n${mode === "realcode" ? "" : getMd("examples")}\n\n${getMd(`instructions_${mode}`)}\n\n${getMd(`user_${mode}`)}\n\n${specialInstructions?.trim()?.length ? getMd("instructions") : ""}\n\n${getMd(`final_${section ? "section_" : ""}${mode}`)}`;
-
+  let out =
+    `${getMd(`preamble_${mode}`)}\n\n` +
+    `${mode === "realcode" ? "" : getMd("examples")}\n\n` +
+    `${getMd(`instructions_${mode}`)}\n\n` +
+    `${getMd(`user_${mode}`)}\n\n` +
+    `${specialInstructions?.trim()?.length ? getMd("instructions") : ""}\n\n` +
+    `${getMd(`final_${section ? "section_" : ""}${mode}`)}`;
+  // Replace placeholders in the prompt text.
   const replace = (key, val) => (str) => {
-    // If the key is a special placeholder and the val is empty than delete that line
+    // If the key is a special placeholder and the val is empty then delete that line
     if (/^\{\{[a-z0-9]+\}\}$/i.test(key)) {
       if (val?.trim()?.length) {
         return str.replaceAll(key, val);
@@ -389,7 +443,6 @@ function getPrompt({
     }
     return str.replaceAll(key, val);
   };
-
   out = [
     replace("{{APPLICATION}}", processed.application),
     replace("{{DETAILS}}", processed.details),
@@ -406,7 +459,6 @@ function getPrompt({
     replace("{{INSTRUCTIONS}}", specialInstructions),
     replace("\n\n\n\n", "\n\n"),
   ].reduce((acc, fn) => fn(acc), out);
-
   return {
     prompt: out.trim(),
     replace: s ? s.range : null,
