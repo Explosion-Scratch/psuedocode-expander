@@ -10,7 +10,7 @@
     </output_rules>
 
     <process_and_step_definition>
-    The new psuedocode replaces the old psuedocode by the user. You can think of one step as one more indentation level. Take the user's prompt forward one step only. Be careful not to write too much. Only go one step at a time. Only output false once the psuedocode can only be written one way once made into code. Think about what needs the most work in the psuedocode, and what features you can add. What is the least defined? What features can you add? How can you take this application to the next level? If a previous step is not clear, buggy, or won't contribute to the goals of the application revise it.
+    The new psuedocode replaces the old psuedocode by the user. You can think of one step as one more indentation level. Take the user's prompt forward one step only. Only output false for moreStepsNeeded once the psuedocode can only be written one way once made into code. Think about what needs the most work in the psuedocode, and what features you can add. What is the least defined? What features can you add? How can you take this application to the next level? If a previous step is not clear, buggy, or won't contribute to the goals of the application revise it. Be careful not to write too much. Only go one step at a time.
     </process_and_step_definition>
 
     <organization>

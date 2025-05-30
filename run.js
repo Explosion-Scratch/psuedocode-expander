@@ -57,6 +57,7 @@ const mode = cli.flags.mode;
 const RUNNING_PATH = "_psuedocode_history.md";
 
 const processed = processFile(file);
+const { diffLines } = require("diff"); // Importing a diff library
 const {
   prompt: PROMPT,
   replace,
@@ -157,10 +158,30 @@ if (mode === "realcode") {
   } else {
     updated = res.step;
   }
+  const originalContent = fs.readFileSync(file, "utf-8"); // Read original content
+
   fs.writeFileSync(
     file,
-    `# application: ${processed.application}\n# details: ${processed.details}\n# step: ${processed.step + 1}\n# more: ${res.more_needed}\n----\n${updated}`,
+    `# application: ${processed.application}\n# details: ${processed.details}\n# step: ${processed.step + 1}\n# more: ${res.more_needed}\n----\n${updated}`
   );
+
+  const updatedContent = fs.readFileSync(file, "utf-8"); // Read updated content
+
+  function displayDiff(originalContent, updatedContent) {
+    const diff = diffLines(originalContent, updatedContent);
+    console.log("\nDiff:");
+    diff.forEach((part) => {
+      if (part.added) {
+        console.log(`\x1b[32m${part.value}\x1b[0m`); // Green text for additions
+      } else if (part.removed) {
+        console.log(`\x1b[31m${part.value}\x1b[0m`); // Red text for deletions
+      } else {
+        console.log(`\x1b[37m${part.value}\x1b[0m`); // Grey text for unchanged lines
+      }
+    });
+  }
+
+  displayDiff(originalContent, updatedContent); // Display the diff
 }
 
 function getUserCode({
