@@ -19,6 +19,7 @@ const cli = meow(
  Options
    --mode     The processing mode (default: psuedocode)
    --section  The header content of a section to process/refine (default: all)
+   --dry-run  Print the prompt to stdout instead of running it
 
  Examples
    $ ${process.argv[1]} input.md
@@ -30,6 +31,10 @@ const cli = meow(
       mode: {
         type: "string",
         default: "psuedocode",
+      },
+      dryRun: {
+        type: "boolean",
+        default: false,
       },
     },
   },
@@ -61,6 +66,7 @@ const {
   mode,
   specialInstructions,
   section: cli.flags.section,
+  dryRun: cli.flags.dryRun,
 });
 
 const OUTPUT_DIR = path.resolve("output");
@@ -70,7 +76,12 @@ if (mode === "realcode") {
   } catch (e) {}
 }
 
-fs.writeFileSync("_prompt.md", PROMPT);
+if (cli.flags.dryRun) {
+  console.log(PROMPT);
+  process.exit(0);
+} else {
+  fs.writeFileSync("_prompt.md", PROMPT);
+}
 
 const result = await runPrompt(PROMPT);
 
@@ -152,7 +163,13 @@ if (mode === "realcode") {
   );
 }
 
-function getUserCode({ runningPath, processed, mode, section = null }) {
+function getUserCode({
+  runningPath,
+  processed,
+  mode,
+  section = null,
+  dryRun = false,
+}) {
   if (section) {
     return getMd(`section_${mode}`)
       .replaceAll(
@@ -175,12 +192,17 @@ function getUserCode({ runningPath, processed, mode, section = null }) {
   }
 
   let out = `${content || ""}<user_psuedocode step="${processed.step}">\n${processed.content}\n</user_psuedocode>`;
-  fs.appendFileSync(runningPath, out + "\n");
+  if (!dryRun) {
+    fs.appendFileSync(runningPath, out + "\n");
+  }
   return out;
 }
 
 function processFile(_path) {
-  const file = fs.readFileSync(_path, "utf-8")?.trim();
+  let file;
+  try {
+    file = fs.readFileSync(_path, "utf-8")?.trim();
+  } catch (e) {}
   if (!file) {
     throw new Error("No file");
   }
@@ -302,7 +324,13 @@ async function runPrompt(message) {
   }
 }
 
-function getPrompt({ processed, mode, specialInstructions, section = null }) {
+function getPrompt({
+  processed,
+  mode,
+  specialInstructions,
+  section = null,
+  dryRun,
+}) {
   let s = section ? getLines(processed.content, section) : null;
   if (section && !s) {
     throw new Error(`Section "${section}" not found in the content.`);
@@ -310,15 +338,37 @@ function getPrompt({ processed, mode, specialInstructions, section = null }) {
 
   let out = `${getMd(`preamble_${mode}`)}\n\n${mode === "realcode" ? "" : getMd("examples")}\n\n${getMd(`instructions_${mode}`)}\n\n${getMd(`user_${mode}`)}\n\n${specialInstructions?.trim()?.length ? getMd("instructions") : ""}\n\n${getMd(`final_${section ? "section_" : ""}${mode}`)}`;
 
-  out = out
-    .replaceAll("{{APPLICATION}}", processed.application)
-    .replaceAll("{{DETAILS}}", processed.details)
-    .replaceAll(
+  const replace = (key, val) => (str) => {
+    // If the key is a special placeholder and the val is empty than delete that line
+    if (/^\{\{[a-z0-9]+\}\}$/i.test(key)) {
+      if (val?.trim()?.length) {
+        return str.replaceAll(key, val);
+      } else {
+        return str
+          .split("\n")
+          .filter((i) => !i.includes(key))
+          .join("\n");
+      }
+    }
+    return str.replaceAll(key, val);
+  };
+
+  out = [
+    replace("{{APPLICATION}}", processed.application),
+    replace("{{DETAILS}}", processed.details),
+    replace(
       "{{USER_PSUEDOCODE}}",
-      getUserCode({ runningPath: RUNNING_PATH, processed, mode, section: s }),
-    )
-    .replaceAll("{{INSTRUCTIONS}}", specialInstructions)
-    .replaceAll("\n\n\n\n", "\n\n");
+      getUserCode({
+        runningPath: RUNNING_PATH,
+        processed,
+        mode,
+        section: s,
+        dryRun,
+      }),
+    ),
+    replace("{{INSTRUCTIONS}}", specialInstructions),
+    replace("\n\n\n\n", "\n\n"),
+  ].reduce((acc, fn) => fn(acc), out);
 
   return {
     prompt: out.trim(),

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe</title>
+    <style>
+        /* General body styling for centering and font */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        /* Main game container styling */
+        #game-container {
+            max-width: 400px;
+            width: 90%; /* Responsive width for smaller screens */
+            margin: auto;
+            text-align: center;
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ddd;
+        }
+
+        h1 {
+            color: #0056b3;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
+        }
+
+        /* Status display for current player/game outcome */
+        #status-display {
+            font-size: 1.6em;
+            margin-bottom: 25px;
+            font-weight: 600;
+            color: #333;
+            min-height: 1.6em; /* Prevent layout shift when text changes */
+        }
+
+        /* Game board grid layout */
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 8px;
+            width: fit-content; /* Adjusts to content size */
+            margin: 0 auto 25px auto; /* Center the board */
+            background-color: #eee;
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Individual cell styling */
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #e0e0e0;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4.5em; /* Large font for X/O */
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            user-select: none; /* Prevent text selection */
+            color: #2c3e50; /* Default color for X/O */
+        }
+
+        /* Hover effect for clickable cells */
+        .cell:not(.occupied):hover {
+            background-color: #dcdcdc;
+            transform: scale(1.03);
+            border-color: #b0b0b0;
+        }
+
+        /* Styling for occupied cells */
+        .cell.occupied {
+            cursor: not-allowed;
+            background-color: #c0c0c0;
+            opacity: 0.9;
+        }
+
+        /* Styling for winning cells */
+        .cell.winner {
+            background-color: #4CAF50 !important; /* Green background */
+            color: white !important; /* White text */
+            border-color: #388E3C !important;
+            animation: pulse 0.7s infinite alternate; /* Subtle pulse animation */
+        }
+
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.05); }
+        }
+
+        /* Reset button styling */
+        #reset-button {
+            padding: 12px 25px;
+            margin-top: 20px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 8px rgba(0, 123, 255, 0.2);
+        }
+
+        #reset-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        #reset-button:active {
+            background-color: #004085;
+            transform: translateY(0);
+        }
+
+        /* Basic responsiveness for smaller screens */
+        @media (max-width: 480px) {
+            #game-board {
+                grid-template-columns: repeat(3, 80px);
+                grid-template-rows: repeat(3, 80px);
+                gap: 5px;
+            }
+
+            .cell {
+                width: 80px;
+                height: 80px;
+                font-size: 3.5em;
+            }
+
+            #game-container {
+                padding: 15px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            #status-display {
+                font-size: 1.3em;
+            }
+
+            #reset-button {
+                padding: 10px 20px;
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main id="game-container">
+        <h1>Tic Tac Toe Game</h1>
+
+        <div id="status-display">Player X's Turn</div>
+
+        <div id="game-board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+
+        <button id="reset-button">Reset Game</button>
+    </main>
+
+    <script>
+        // --- Game State Management ---
+        let boardState = ['', '', '', '', '', '', '', '', '']; // Represents the 3x3 board
+        let currentPlayer = 'X'; // Current player, 'X' or 'O'
+        let gameActive = true; // True if the game is ongoing, false if won or drawn
+
+        // --- UI Element References ---
+        const statusDisplayElement = document.getElementById('status-display');
+        const boardCells = document.querySelectorAll('.cell');
+        const resetButtonElement = document.getElementById('reset-button');
+
+        // Define all possible winning combinations (rows, columns, diagonals)
+        const winningCombinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],  // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],  // Columns
+            [0, 4, 8], [2, 4, 6]              // Diagonals
+        ];
+
+        // --- Game Logic Functions ---
+
+        /**
+         * Initializes or resets the game state and UI.
+         */
+        function initializeGame() {
+            boardState = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'X';
+            gameActive = true;
+            statusDisplayElement.textContent = `Player ${currentPlayer}'s Turn`;
+
+            boardCells.forEach(cell => {
+                cell.textContent = ''; // Clear cell content
+                cell.classList.remove('occupied', 'winner'); // Remove any styling classes
+            });
+        }
+
+        /**
+         * Handles a click event on a game board cell.
+         * @param {HTMLElement} clickedCellElement - The DOM element of the clicked cell.
+         */
+        function handleCellClick(clickedCellElement) {
+            const clickedCellIndex = parseInt(clickedCellElement.dataset.index);
+
+            // If the game is not active or the cell is already occupied, do nothing.
+            if (!gameActive || boardState[clickedCellIndex] !== '') {
+                return;
+            }
+
+            // Update UI and game state for the current move
+            clickedCellElement.textContent = currentPlayer;
+            clickedCellElement.classList.add('occupied'); // Mark cell as occupied
+            boardState[clickedCellIndex] = currentPlayer;
+
+            const winningCombo = checkWin(boardState, currentPlayer);
+
+            if (winningCombo) {
+                // If current player wins
+                statusDisplayElement.textContent = `Player ${currentPlayer} Wins!`;
+                gameActive = false;
+                // Highlight winning cells
+                winningCombo.forEach(index => {
+                    boardCells[index].classList.add('winner');
+                });
+            } else if (checkDraw(boardState)) {
+                // If it's a draw
+                statusDisplayElement.textContent = "It's a Draw!";
+                gameActive = false;
+            } else {
+                // Continue game: switch player and update status
+                currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+                statusDisplayElement.textContent = `Player ${currentPlayer}'s Turn`;
+            }
+        }
+
+        /**
+         * Checks if the current player has won the game.
+         * @param {Array<string>} currentBoardState - The current state of the board.
+         * @param {string} playerMark - The mark of the player to check ('X' or 'O').
+         * @returns {Array<number>|null} The winning combination of indices if a win is found, otherwise null.
+         */
+        function checkWin(currentBoardState, playerMark) {
+            for (const combination of winningCombinations) {
+                const [a, b, c] = combination;
+                if (currentBoardState[a] === playerMark &&
+                    currentBoardState[b] === playerMark &&
+                    currentBoardState[c] === playerMark) {
+                    return combination; // Return the winning combination
+                }
+            }
+            return null; // No win detected
+        }
+
+        /**
+         * Checks if the game is a draw (board is full and no winner).
+         * @param {Array<string>} currentBoardState - The current state of the board.
+         * @returns {boolean} True if the game is a draw, false otherwise.
+         */
+        function checkDraw(currentBoardState) {
+            return currentBoardState.every(cellMark => cellMark !== '');
+        }
+
+        /**
+         * Resets the game to its initial state.
+         */
+        function resetGame() {
+            initializeGame();
+        }
+
+        // --- Event Listeners ---
+
+        // Attach click event listeners to each game cell
+        boardCells.forEach(cell => {
+            cell.addEventListener('click', (event) => handleCellClick(event.target));
+        });
+
+        // Attach click event listener to the reset button
+        resetButtonElement.addEventListener('click', resetGame);
+
+        // --- Initial Setup ---
+        // Call initializeGame() to set up the board when the script loads
+        initializeGame();
+    </script>
+</body>
+</html>
