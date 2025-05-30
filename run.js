@@ -137,6 +137,11 @@ if (mode === "realcode") {
   process.exit(0);
 } else {
   const res = ((t) => {
+    const futureFeatures = extractTag("future_feature", t);
+    const possibleBugs = extractTag("possible_bug", t);
+    const needsRegression = extractTag("needs_regression", t);
+    const designDetails = extractTag("design_details", t);
+
     return {
       step: t.split("<step>")[1]?.split("</step>")[0]?.trim() || "",
       more_needed:
@@ -144,6 +149,10 @@ if (mode === "realcode") {
           .split("<moreStepsNeeded>")[1]
           ?.split("</moreStepsNeeded>")[0]
           ?.trim() === "true",
+      futureFeatures,
+      possibleBugs,
+      needsRegression,
+      designDetails,
     };
   })(result.text);
   let updated;
@@ -162,7 +171,7 @@ if (mode === "realcode") {
 
   fs.writeFileSync(
     file,
-    `# application: ${processed.application}\n# details: ${processed.details}\n# step: ${processed.step + 1}\n# more: ${res.more_needed}\n----\n${updated}`
+    `# application: ${processed.application}\n# details: ${processed.details}\n# step: ${processed.step + 1}\n# more: ${res.more_needed}\n----\n${updated}`,
   );
 
   const updatedContent = fs.readFileSync(file, "utf-8"); // Read updated content
@@ -181,7 +190,13 @@ if (mode === "realcode") {
     });
   }
 
-  displayDiff(originalContent, updatedContent); // Display the diff
+  displayDiff(originalContent, updatedContent);
+  const bulletpoints = (arr) => arr.map((i) => `- ${i}`).join("\n") + "\n\n";
+
+  console.log("🚀 Future Features:\n", bulletpoints(res.futureFeatures));
+  console.log("🐞 Possible Bugs:\n", bulletpoints(res.possibleBugs));
+  console.log("🔄 Needs Regression:\n", bulletpoints(res.needsRegression));
+  console.log("🎨 Design Details:\n", bulletpoints(res.designDetails));
 }
 
 function getUserCode({
@@ -317,6 +332,7 @@ function normalize(str) {
 }
 
 async function runPrompt(message) {
+  return { text: fs.readFileSync("fake.md", "utf-8")?.trim() };
   const allKeys = process.env.GEMINI_API_KEY.split(":").map((i) => i.trim());
   const apiKey = allKeys[Math.floor(Math.random() * allKeys.length)];
   const ai = new GoogleGenAI({
@@ -396,4 +412,14 @@ function getPrompt({
     replace: s ? s.range : null,
     leading: s ? s.leading : null,
   };
+}
+
+function extractTag(tagName, text) {
+  const regex = new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, "g");
+  const matches = [];
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    matches.push(match[1].trim());
+  }
+  return matches;
 }

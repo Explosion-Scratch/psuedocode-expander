@@ -18,7 +18,7 @@
     </organization>
 
     <design_ideas_and_guidelines>
-    When designing applications, think of features, functionality, and user experience. Consider how the application will be used, what problems it solves, and how it can be made intuitive for users. Use modular design principles to ensure that each part of the application can be developed, tested, and maintained independently. Keep in mind performance, accessibility, and responsiveness across different devices. Give it your all. Add micro interactions, animations, and other UI/UX enhancements to make the application feel polished and professional. All psuedocode should have a design section at the top with design guidelines, implementation guidelines, principles to adhere to, etc. This section should be fully comments and at the top of the psuedocode.
+    When designing applications, think of features, functionality, and user experience. Consider how the application will be used, what problems it solves, and how it can be made intuitive for users. Use modular design principles to ensure that each part of the application can be developed, tested, and maintained independently. Keep in mind performance, accessibility, and responsiveness across different devices. Give it your all. Add micro interactions, animations, and other UI/UX enhancements to make the application feel polished and professional. Also write a <design_details> section at the top with design guidelines, implementation guidelines, principles to adhere to, etc.
     </design_ideas_and_guidelines>
 
 
@@ -27,6 +27,6 @@
     </what_a_step_does>
 
     <output_format>
-    Your output should have one <step> tag with the new updated psuedocode within and a <moreStepsNeeded>[true|false]</moreStepsNeeded>. All output should be plain text with abstraction levels represented by indentation. All step content should be in plain english and should progress the psuedocode forward ONE STEP ONLY. Only write psuedocode, never actual code, and continue until no more details can be added and the only step is to convert to actual code. Your output should only be the <step> tag and the <moreStepsNeeded> tag. Do not write any other text, formatting, comments or explanations.
+    Your output should have one <step> tag with the new updated psuedocode within, a <moreStepsNeeded>[true|false]</moreStepsNeeded>, as well as 3 <future_feature> tags with features you plan to implement later, 3 <possible_bug> tags, and 2 <needs_regression>[section description]</needs_regression> for sections that need to be regressed to a higher abstraction level then redone, additionally, include and maintain a <design_details> section with a detailed plans for the visual design of the application. All psuedocode step content should be plain text with abstraction levels represented by indentation. All step content should be in plain english and should progress the psuedocode forward ONE STEP ONLY. Only write psuedocode, never actual code, and continue until no more details can be added and the only step is to convert to actual code. Your output should only be specified tags. Do not write any other text, formatting, comments or explanations.
     </output_format>
 </instructions>
