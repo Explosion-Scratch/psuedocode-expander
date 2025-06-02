@@ -1,6 +1,8 @@
 # Psuedocode Expander
 
-https://github.com/Explosion-Scratch/psuedocode-expander/raw/refs/heads/main/demo.mp4
+
+https://github.com/user-attachments/assets/c598e671-72fa-4929-b530-a830c8795353
+
 
 Build full stack applications from psuedocode. Iterate on your natural language psuedocode with AI to take the psuedocode one level at a time towards a real application. Here are some examples:
 
